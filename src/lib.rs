@@ -63,11 +63,6 @@ impl<const N: usize> RingBuffer<N> {
         };
         self.slots[tail] = value;
         self.len += 1;
-        proof {
-            assert forall|i: int| 0 <= i < before.len() implies
-                #[trigger] self.view()[i] == before[i] by {}
-            assert(self.view() =~= before.push(value));
-        }
         true
     }
 
@@ -84,11 +79,6 @@ impl<const N: usize> RingBuffer<N> {
         let value = self.slots[self.head];
         self.head = if self.head == N - 1 { 0 } else { self.head + 1 };
         self.len -= 1;
-        proof {
-            assert forall|i: int| 0 <= i < self.len implies
-                #[trigger] self.view()[i] == before[i + 1] by {}
-            assert(self.view() =~= before.subrange(1, before.len() as int));
-        }
         Some(value)
     }
 }
