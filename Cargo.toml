@@ -1,0 +1,13 @@
+[package]
+name = "verified-ringbuffer"
+version = "0.1.0"
+edition = "2021"
+description = "A small ring buffer for learning Flux and Verus"
+license = "MIT"
+
+[package.metadata.flux]
+enabled = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(flux)'] }
+
