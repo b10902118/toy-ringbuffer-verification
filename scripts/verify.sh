@@ -7,4 +7,4 @@ if [[ ! -x "$verus_bin" ]]; then
     exit 1
 fi
 # Check the implementation as a library; no entry point or executable needed.
-"$verus_bin" --crate-type=lib verification/verus/ring_buffer.rs
+"$verus_bin" --crate-type=lib src/lib.rs
