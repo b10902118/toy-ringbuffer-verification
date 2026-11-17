@@ -2,29 +2,31 @@ use vstd::prelude::*;
 
 verus! {
 
-// This is a separate executable implementation: Verus syntax is not accepted
-// by ordinary rustc. Its storage and algorithm mirror src/lib.rs.
-pub struct RingBuffer {
-    slots: [u64; 8],
+// Verus syntax is checked with scripts/verify.sh rather than ordinary rustc.
+// Capacity is fixed per type and must be positive.
+pub struct RingBuffer<const N: usize> {
+    slots: [u64; N],
     head: usize,
     len: usize,
 }
 
-impl RingBuffer {
+impl<const N: usize> RingBuffer<N> {
     pub closed spec fn valid(&self) -> bool {
-        self.head < 8 && self.len <= 8
+        N > 0 && self.head < N && self.len <= N
     }
 
-    // Logical position i maps to physical position (head + i) mod 8.
-    // This sequence is a specification, with no runtime allocation.
+    // i is the i-th element to pop
     pub closed spec fn view(&self) -> Seq<u64> {
-        Seq::new(self.len as nat, |i: int| self.slots@[(self.head + i) % 8])
+        Seq::new(self.len as nat, |i: int| self.slots@[
+            if self.head + i < N { self.head + i } else { self.head + i - N }
+        ])
     }
 
     pub fn new() -> (result: Self)
+        requires N > 0,
         ensures result.valid(), result.view() == Seq::<u64>::empty(),
     {
-        Self { slots: [0; 8], head: 0, len: 0 }
+        Self { slots: [0; N], head: 0, len: 0 }
     }
 
     pub fn len(&self) -> (result: usize)
@@ -39,31 +41,33 @@ impl RingBuffer {
 
     pub fn is_full(&self) -> (result: bool)
         requires self.valid(),
-        ensures result == (self.view().len() == 8),
-    { self.len == 8 }
+        ensures result == (self.view().len() == N),
+    { self.len == N }
 
     pub fn push(&mut self, value: u64) -> (accepted: bool)
         requires old(self).valid(),
         ensures
             final(self).valid(),
-            accepted == (old(self).view().len() < 8),
+            accepted == (old(self).view().len() < N),
             accepted ==> final(self).view() == old(self).view().push(value),
             !accepted ==> final(self).view() == old(self).view(),
     {
-        if self.len == 8 { return false; }
-        //let ghost before = self.view();
-        let tail = (self.head + self.len) % 8;
+        if self.len == N { return false; }
+        let ghost before = self.view();
+        // Subtract before adding to avoid overflowing usize.
+        let remaining = N - self.head;
+        let tail = if self.len < remaining {
+            self.head + self.len
+        } else {
+            self.len - remaining
+        };
         self.slots[tail] = value;
         self.len += 1;
-        /*
         proof {
             assert forall|i: int| 0 <= i < before.len() implies
-                #[trigger] self.view()[i] == before[i] by {
-                assert((self.head + i) % 8 != tail);
-            }
+                #[trigger] self.view()[i] == before[i] by {}
             assert(self.view() =~= before.push(value));
         }
-        */
         true
     }
 
@@ -76,20 +80,15 @@ impl RingBuffer {
                 && final(self).view() == old(self).view().subrange(1, old(self).view().len() as int),
     {
         if self.len == 0 { return None; }
-        //let ghost before = self.view();
-        //let ghost old_head = self.head;
+        let ghost before = self.view();
         let value = self.slots[self.head];
-        self.head = (self.head + 1) % 8;
+        self.head = if self.head == N - 1 { 0 } else { self.head + 1 };
         self.len -= 1;
-        /*
         proof {
             assert forall|i: int| 0 <= i < self.len implies
-                #[trigger] self.view()[i] == before[i + 1] by {
-                assert((self.head + i) % 8 == (old_head + i + 1) % 8);
-            }
+                #[trigger] self.view()[i] == before[i + 1] by {}
             assert(self.view() =~= before.subrange(1, before.len() as int));
         }
-        */
         Some(value)
     }
 }
